@@ -332,6 +332,40 @@
 
 <script>
 
+const input = document.getElementById("messageInput");
+const button = document.getElementById("sendButton");
+const chatWindow = document.getElementById("chatWindow");
+
+function addMessage(text, type) {
+
+    const message = document.createElement("div");
+
+    message.classList.add("message");
+
+    if (type === "user") {
+        message.classList.add("user-message");
+    } else {
+        message.classList.add("friday-message");
+    }
+
+    const name = document.createElement("div");
+
+    name.classList.add("message-name");
+
+    name.textContent = type === "user" ? "YOU" : "FRIDAY";
+
+    const content = document.createElement("div");
+
+    content.textContent = text;
+
+    message.appendChild(name);
+    message.appendChild(content);
+
+    chatWindow.appendChild(message);
+
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
 async function sendMessage() {
 
     const text = input.value.trim();
@@ -371,7 +405,17 @@ async function sendMessage() {
         console.error(error);
     }
 }
-    
+
+button.addEventListener("click", sendMessage);
+
+input.addEventListener("keydown", function(event) {
+
+    if (event.key === "Enter") {
+        sendMessage();
+    }
+
+});
+
 </script>
 
 </body>
