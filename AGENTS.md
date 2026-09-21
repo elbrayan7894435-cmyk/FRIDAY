@@ -1,20 +1,52 @@
 # FRIDAY — Agent Development Rules & Architecture
 
-## System Architecture
+## System Architecture & Core Orchestration Pipeline
 
-FRIDAY is a personal AI assistant built with a clear separation between frontend presentation and backend intelligence/memory.
+FRIDAY operates as a modular personal AI operating layer built with a strict separation between presentation, orchestration, memory, knowledge retrieval, and tool execution.
 
-* **Frontend**: GitHub Pages / Static HTML + Vanilla JS
-* **Backend**: Cloudflare Workers
-* **AI Model**: Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`)
-* **Persistent Memory**: Cloudflare KV (`FRIDAY_MEMORY_KV`)
-* **Knowledge Base**: Cloudflare AI Search (`friday-knowledge` / `default` namespace / `vector` retrieval)
+```
+user message
+→ request analysis (RequestRouter)
+→ context gathering (ContextManager)
+→ tool selection & permission check (ToolRegistry)
+→ tool execution
+→ result validation
+→ response generation (ResponseGenerator)
+```
+
+---
+
+## Request Categorization
+
+The orchestrator explicitly categorizes incoming requests into:
+
+1. `conversational`: General chat exchanges.
+2. `knowledge`: Questions matching knowledge base retrieval patterns.
+3. `memory`: Requests to store, update, or recall persistent facts/preferences.
+4. `web_research`: External web search requests.
+5. `tool_request`: Direct invocations of registered tools.
+6. `multi_step`: Multi-turn sequential tasks.
+7. `unsupported`: Safety or capability boundary violations.
+
+---
+
+## Tool Registry & Security Rules
+
+* Every tool must define:
+  * `name`
+  * `description`
+  * `inputSchema`
+  * `permissionLevel` (`normal` or `high_impact`)
+  * `execute` function
+* High-impact tools (`permissionLevel: "high_impact"`) require explicit user confirmation (`confirmedByUser: true`) before execution.
+* The orchestrator records a complete `auditTrail` for all tool execution attempts.
+* FRIDAY never claims a tool succeeded unless the tool actually returned a verified success result.
 
 ---
 
 ## Context & Memory Classification
 
-FRIDAY explicitly distinguishes between six distinct memory & context categories:
+FRIDAY explicitly distinguishes between six distinct context categories:
 
 1. `conversation_context`: Active session chat history.
 2. `short_term_context`: Temporary context needed for multi-turn interactions.
@@ -25,63 +57,14 @@ FRIDAY explicitly distinguishes between six distinct memory & context categories
 
 ---
 
-## Knowledge Retrieval Architecture
-
-Knowledge search is powered by `KnowledgeService` interfacing with Cloudflare AI Search:
-
-* **AI Search Instance**: `friday-knowledge`
-* **Namespace**: `default`
-* **Retrieval Type**: `vector`
-
-### Structured Knowledge Result Format
-
-Knowledge queries return structured results formatted as:
-
-```json
-{
-  "found": true,
-  "results": [
-    {
-      "id": "doc_01",
-      "title": "Document Title",
-      "content": "Document text segment",
-      "score": 0.88,
-      "source": "friday-knowledge"
-    }
-  ],
-  "source": "knowledge_base",
-  "confidence": 0.88,
-  "query": "search phrase"
-}
-```
-
-### Developer Diagnostics Endpoint
-
-Developers can verify knowledge search availability via `/api/diagnostics`:
-
-```json
-{
-  "status": "online",
-  "system": "FRIDAY",
-  "knowledgeDiagnostics": {
-    "available": true,
-    "retrievalType": "vector",
-    "instance": "friday-knowledge",
-    "namespace": "default",
-    "lastQuery": "search phrase",
-    "lastResultsCount": 1
-  }
-}
-```
-
----
-
 ## Local Development & Testing
 
-### Running Unit Tests
-
 ```bash
+npm install
 npm test
 ```
 
-The test suite covers persistent memory operations and knowledge search retrieval, scoring, diagnostics, and failure fallback.
+The test suite covers:
+* Persistent memory CRUD and edge case parsing (`tests/memory-store.test.ts`)
+* Vector knowledge retrieval and developer diagnostics (`tests/knowledge-service.test.ts`)
+* Request analysis, tool permissions, input schema validation, and audit logging (`tests/orchestrator.test.ts`)

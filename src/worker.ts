@@ -1,6 +1,7 @@
 import { MemoryStore } from './memory';
 import { MinimalKVNamespace } from './memory/types';
 import { KnowledgeService } from './knowledge';
+import { FridayOrchestrator } from './orchestrator';
 
 export interface Env {
   FRIDAY_MEMORY_KV?: MinimalKVNamespace;
@@ -23,11 +24,11 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Fallback in-memory KV if binding is missing in local/demo environment
+    // Fallback in-memory KV
     const memoryKv: MinimalKVNamespace = env.FRIDAY_MEMORY_KV || createInMemoryKV();
     const memoryStore = new MemoryStore(memoryKv);
 
-    // Knowledge service initialization using Cloudflare AI Search instance 'friday-knowledge' and namespace 'default'
+    // Knowledge service
     const knowledgeProvider = env.AI_SEARCH || createMockAISearchProvider();
     const knowledgeService = new KnowledgeService(knowledgeProvider, {
       instance: 'friday-knowledge',
@@ -35,15 +36,26 @@ export default {
       retrievalType: 'vector',
     });
 
+    // Orchestrator initialization
+    const orchestrator = new FridayOrchestrator(memoryStore, knowledgeService);
+
     try {
       // Diagnostics Endpoint for Developers
       if (path === '/api/diagnostics') {
         const diagnostics = knowledgeService.getDiagnostics();
+        const toolsList = orchestrator.toolRegistry.listTools().map((t) => ({
+          name: t.name,
+          description: t.description,
+          permissionLevel: t.permissionLevel,
+        }));
+
         return new Response(
           JSON.stringify({
             status: 'online',
             system: 'FRIDAY',
             knowledgeDiagnostics: diagnostics,
+            registeredTools: toolsList,
+            auditCount: orchestrator.toolRegistry.getAuditLogs().length,
             timestamp: new Date().toISOString(),
           }),
           { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
@@ -55,17 +67,18 @@ export default {
         return await handleMemoryEndpoints(request, path, memoryStore, corsHeaders);
       }
 
-      // Main AI Assistant Route
+      // Main AI Assistant Route through Orchestration Pipeline
       if (path === '/api/chat' || path === '/') {
         if (request.method !== 'POST') {
           return new Response(
-            JSON.stringify({ response: 'FRIDAY system active.', status: 'online' }),
+            JSON.stringify({ response: 'FRIDAY orchestrator active.', status: 'online' }),
             { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
           );
         }
 
         const body = (await request.json().catch(() => ({}))) as any;
         const userMessage = body.message || body.prompt || '';
+        const confirmedByUser = body.confirmedByUser === true;
 
         if (!userMessage) {
           return new Response(
@@ -74,51 +87,22 @@ export default {
           );
         }
 
-        // 1. Retrieve relevant persistent memories
-        const relevantMemories = await memoryStore.searchRelevantMemories(userMessage, {
-          category: 'persistent_memory',
-          minConfidence: 0.4,
-          limit: 5,
+        // Orchestrator processing pipeline: Analysis -> Context -> Tool Execution -> Response
+        const orchestratorResult = await orchestrator.processRequest(userMessage, {
+          confirmedByUser,
         });
-
-        const memoryUsed = relevantMemories.length > 0;
-        const memorySources = relevantMemories.map((m) => m.memory.source);
-
-        // 2. Perform Knowledge Retrieval
-        const knowledgeResult = await knowledgeService.search(userMessage);
-
-        // Build context explicit categories summary
-        const contextSummary = {
-          conversationContext: 'Active session chat history',
-          persistentMemoriesCount: relevantMemories.length,
-          knowledgeBaseUsed: knowledgeResult.found,
-          knowledgeResultCount: knowledgeResult.results.length,
-          externalInfoUsed: false,
-          toolResultsUsed: false,
-        };
-
-        let responseText = `I have received your query: "${userMessage}".`;
-
-        if (memoryUsed) {
-          const memoryContent = relevantMemories.map((m) => `- ${m.memory.content}`).join('\n');
-          responseText += `\n\n[Persistent Memory Context Applied]:\n${memoryContent}`;
-        }
-
-        if (knowledgeResult.found) {
-          const kbContent = knowledgeResult.results.map((r) => `- ${r.title ? r.title + ': ' : ''}${r.content}`).join('\n');
-          responseText += `\n\n[Knowledge Base Context Applied]:\n${kbContent}`;
-        }
 
         return new Response(
           JSON.stringify({
-            response: responseText,
-            memoryUsed,
-            memoryCount: relevantMemories.length,
-            memorySources,
-            knowledgeUsed: knowledgeResult.found,
-            knowledgeCount: knowledgeResult.results.length,
-            knowledgeConfidence: knowledgeResult.confidence,
-            contextSummary,
+            response: orchestratorResult.response,
+            category: orchestratorResult.category,
+            toolsExecuted: orchestratorResult.toolsExecuted,
+            requiresConfirmation: orchestratorResult.requiresConfirmation,
+            pendingToolCall: orchestratorResult.pendingToolCall,
+            auditTrail: orchestratorResult.auditTrail,
+            contextSummary: orchestratorResult.contextSummary,
+            memoryUsed: orchestratorResult.contextSummary.memoryUsed,
+            knowledgeUsed: orchestratorResult.contextSummary.knowledgeUsed,
             status: 'online',
           }),
           { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
