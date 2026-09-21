@@ -1,13 +1,13 @@
 # FRIDAY — Personal AI Assistant
 
-FRIDAY is a personal AI assistant web application featuring a minimal, futuristic visual layout, persistent memory storage, and Cloudflare Worker AI integration.
+FRIDAY is a personal AI assistant web application featuring a minimal visual layout, persistent memory storage, structured knowledge retrieval, and Cloudflare Worker AI integration.
 
 ## Features & Architecture
 
-* **Frontend**: Responsive single-page web app styled with glassmorphism, HUD metrics (Calendar, Memory status, System status), and Web Speech synthesis.
-* **Backend**: Cloudflare Worker handling `/api/chat` and `/api/memory` CRUD operations.
-* **Persistent Memory**: Cloudflare KV (`FRIDAY_MEMORY_KV`) managed by `MemoryStore` for persistent memory creation, updates, retrieval, deletion, and keyword relevance search.
-* **Context Schema**: Strictly categorizes conversation context, short-term context, persistent memories, knowledge base retrieval, external information, and tool outputs.
+* **Frontend**: Single-page web app styled with HUD metrics (Calendar, Memory status, System status) and Web Speech synthesis.
+* **Backend**: Cloudflare Worker handling `/api/chat`, `/api/memory` CRUD, and `/api/diagnostics`.
+* **Persistent Memory**: Managed by `MemoryStore` backed by Cloudflare KV (`FRIDAY_MEMORY_KV`).
+* **Knowledge Retrieval**: Managed by `KnowledgeService` backed by Cloudflare AI Search (`friday-knowledge` instance, `default` namespace, `vector` retrieval type).
 
 ## Project Structure
 
@@ -19,12 +19,11 @@ FRIDAY is a personal AI assistant web application featuring a minimal, futuristi
 ├── wrangler.toml              # Cloudflare Worker configuration
 ├── src/
 │   ├── worker.ts              # Worker API routes and response composition
-│   └── memory/
-│       ├── types.ts           # Memory interfaces & KV bindings
-│       ├── memory-store.ts    # MemoryStore class with KV persistence
-│       └── index.ts           # Memory module exports
+│   ├── memory/                # Persistent memory store
+│   └── knowledge/             # AI Search knowledge service & diagnostics
 └── tests/
-    └── memory-store.test.ts   # Comprehensive memory layer test suite
+    ├── memory-store.test.ts   # Memory layer test suite
+    └── knowledge-service.test.ts # Knowledge retrieval test suite
 ```
 
 ## Setup & Running Tests
@@ -37,9 +36,4 @@ FRIDAY is a personal AI assistant web application featuring a minimal, futuristi
 2. Run test suite:
    ```bash
    npm test
-   ```
-
-3. Deploy Cloudflare Worker:
-   ```bash
-   npx wrangler deploy
    ```

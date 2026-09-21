@@ -1,9 +1,11 @@
 import { MemoryStore } from './memory';
 import { MinimalKVNamespace } from './memory/types';
+import { KnowledgeService } from './knowledge';
 
 export interface Env {
   FRIDAY_MEMORY_KV?: MinimalKVNamespace;
   AI?: any;
+  AI_SEARCH?: any;
 }
 
 export default {
@@ -25,7 +27,29 @@ export default {
     const memoryKv: MinimalKVNamespace = env.FRIDAY_MEMORY_KV || createInMemoryKV();
     const memoryStore = new MemoryStore(memoryKv);
 
+    // Knowledge service initialization using Cloudflare AI Search instance 'friday-knowledge' and namespace 'default'
+    const knowledgeProvider = env.AI_SEARCH || createMockAISearchProvider();
+    const knowledgeService = new KnowledgeService(knowledgeProvider, {
+      instance: 'friday-knowledge',
+      namespace: 'default',
+      retrievalType: 'vector',
+    });
+
     try {
+      // Diagnostics Endpoint for Developers
+      if (path === '/api/diagnostics') {
+        const diagnostics = knowledgeService.getDiagnostics();
+        return new Response(
+          JSON.stringify({
+            status: 'online',
+            system: 'FRIDAY',
+            knowledgeDiagnostics: diagnostics,
+            timestamp: new Date().toISOString(),
+          }),
+          { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+
       // Memory CRUD Endpoints
       if (path === '/api/memory' || path.startsWith('/api/memory/')) {
         return await handleMemoryEndpoints(request, path, memoryStore, corsHeaders);
@@ -50,7 +74,7 @@ export default {
           );
         }
 
-        // Retrieve relevant persistent memories for context
+        // 1. Retrieve relevant persistent memories
         const relevantMemories = await memoryStore.searchRelevantMemories(userMessage, {
           category: 'persistent_memory',
           minConfidence: 0.4,
@@ -60,18 +84,29 @@ export default {
         const memoryUsed = relevantMemories.length > 0;
         const memorySources = relevantMemories.map((m) => m.memory.source);
 
-        // Build context explicit categories
+        // 2. Perform Knowledge Retrieval
+        const knowledgeResult = await knowledgeService.search(userMessage);
+
+        // Build context explicit categories summary
         const contextSummary = {
           conversationContext: 'Active session chat history',
           persistentMemoriesCount: relevantMemories.length,
-          knowledgeBaseUsed: false,
+          knowledgeBaseUsed: knowledgeResult.found,
+          knowledgeResultCount: knowledgeResult.results.length,
+          externalInfoUsed: false,
           toolResultsUsed: false,
         };
 
         let responseText = `I have received your query: "${userMessage}".`;
+
         if (memoryUsed) {
           const memoryContent = relevantMemories.map((m) => `- ${m.memory.content}`).join('\n');
           responseText += `\n\n[Persistent Memory Context Applied]:\n${memoryContent}`;
+        }
+
+        if (knowledgeResult.found) {
+          const kbContent = knowledgeResult.results.map((r) => `- ${r.title ? r.title + ': ' : ''}${r.content}`).join('\n');
+          responseText += `\n\n[Knowledge Base Context Applied]:\n${kbContent}`;
         }
 
         return new Response(
@@ -80,6 +115,9 @@ export default {
             memoryUsed,
             memoryCount: relevantMemories.length,
             memorySources,
+            knowledgeUsed: knowledgeResult.found,
+            knowledgeCount: knowledgeResult.results.length,
+            knowledgeConfidence: knowledgeResult.confidence,
             contextSummary,
             status: 'online',
           }),
@@ -167,6 +205,26 @@ function createInMemoryKV(): MinimalKVNamespace {
         .filter((k) => k.startsWith(prefix))
         .map((name) => ({ name }));
       return { keys, list_complete: true };
+    },
+  };
+}
+
+function createMockAISearchProvider() {
+  return {
+    async search(query: string) {
+      if (query.toLowerCase().includes('architecture') || query.toLowerCase().includes('friday')) {
+        return {
+          results: [
+            {
+              id: 'doc_01',
+              title: 'FRIDAY System Architecture Overview',
+              content: 'FRIDAY is a personal AI operating layer with persistent memory, Cloudflare Workers backend, and vector knowledge search.',
+              score: 0.88,
+            },
+          ],
+        };
+      }
+      return { results: [] };
     },
   };
 }
