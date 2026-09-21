@@ -511,7 +511,10 @@
 
 <script>
     // CONFIGURATION AND REFERENCES
-    const WORKER_URL = "https://friday-ai.elbrayan7894435.workers.dev";
+    // Supports dynamic override via localStorage for local testing or custom deployment
+    const DEFAULT_WORKER_URL = "https://friday-ai.elbrayan7894435.workers.dev";
+    const WORKER_URL = localStorage.getItem("friday_worker_url") || DEFAULT_WORKER_URL;
+    const REQUEST_TIMEOUT_MS = 15000; // 15-second timeout safeguard
     
     const input = document.getElementById("messageInput");
     const button = document.getElementById("sendButton");
@@ -542,7 +545,7 @@
     const userId = getUserId();
 
     // 2. DYNAMIC HUD & CLOCK UPDATE
-    function updateHUD() {
+    function updateHUD(memoryStatusOverride) {
         const now = new Date();
         
         // Dynamic greeting based on hour
@@ -566,10 +569,14 @@
             systemStatus.classList.add("offline");
         }
 
-        panelMemory.textContent = userId ? "CONNECTED" : "READY";
+        if (memoryStatusOverride) {
+            panelMemory.textContent = memoryStatusOverride;
+        } else {
+            panelMemory.textContent = userId ? "CONNECTED" : "READY";
+        }
     }
 
-    setInterval(updateHUD, 1000);
+    setInterval(() => updateHUD(), 1000);
     updateHUD();
 
     // 3. UI MESSAGE MANAGEMENT
@@ -620,6 +627,17 @@
     }
 
     // 4. VOICE SYNTHESIS (SPEECH OUTPUT)
+    let availableVoices = [];
+    function loadVoices() {
+        if ('speechSynthesis' in window) {
+            availableVoices = window.speechSynthesis.getVoices();
+        }
+    }
+    if ('speechSynthesis' in window) {
+        loadVoices();
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
     function speak(text) {
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel(); // Clear previous queue
@@ -627,14 +645,29 @@
             utterance.lang = navigator.language || 'en-US';
             utterance.rate = 1.0;
             utterance.pitch = 1.0;
+
+            if (availableVoices.length > 0) {
+                // Prefer matching locale voices
+                const targetLang = (navigator.language || 'en-US').substring(0, 2);
+                const matchingVoice = availableVoices.find(v => v.lang.startsWith(targetLang));
+                if (matchingVoice) utterance.voice = matchingVoice;
+            }
+
             window.speechSynthesis.speak(utterance);
         }
     }
 
-    // 5. SEND MESSAGE TO WORKER
+    // 5. SEND MESSAGE TO WORKER WITH TIMEOUT & ROBUST ERROR HANDLING
     async function sendMessage() {
         const text = input.value.trim();
         if (text === "") return;
+
+        if (!navigator.onLine) {
+            addMessage(text, "user");
+            addMessage("Offline mode active. Connection to backend server is unavailable.", "friday");
+            input.value = "";
+            return;
+        }
 
         // Temporarily disable input controls
         input.value = "";
@@ -647,6 +680,9 @@
         // Update reactor animation
         coreReactor.classList.add("thinking");
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
         try {
             const response = await fetch(WORKER_URL, {
                 method: "POST",
@@ -656,25 +692,55 @@
                 body: JSON.stringify({
                     message: text,
                     userId: userId
-                })
+                }),
+                signal: controller.signal
             });
 
+            clearTimeout(timeoutId);
             removeTypingIndicator();
 
             if (!response.ok) {
-                throw new Error(`Server status: ${response.status}`);
+                if (response.status === 429) {
+                    throw new Error("Rate limit exceeded. Please wait a moment before sending another message.");
+                } else if (response.status >= 500) {
+                    throw new Error(`Server error (${response.status}). My backend service is currently experiencing issues.`);
+                } else {
+                    throw new Error(`Unexpected status code: ${response.status}`);
+                }
             }
 
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonErr) {
+                throw new Error("Invalid response format received from backend server.");
+            }
+
             const reply = data.response || "I received an empty response.";
+
+            // Handle metadata if backend provided memory/knowledge context indicators
+            if (data.memoryUsed) {
+                updateHUD("KV MEMORY");
+            } else if (data.knowledgeUsed) {
+                updateHUD("AI SEARCH");
+            }
 
             addMessage(reply, "friday");
             speak(reply);
 
         } catch (error) {
+            clearTimeout(timeoutId);
             console.error("Communication error:", error);
             removeTypingIndicator();
-            addMessage("Connection error. My backend is not responding.", "friday");
+
+            let errorMessage = "Connection error. My backend is not responding.";
+            if (error.name === "AbortError") {
+                errorMessage = "Request timed out. My backend took too long to respond.";
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            addMessage(errorMessage, "friday");
         } finally {
             // Restore control state
             coreReactor.classList.remove("thinking");
