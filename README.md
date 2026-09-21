@@ -1,50 +1,45 @@
 # FRIDAY — Personal AI Assistant
 
-FRIDAY is a personal AI assistant web application designed as an intelligent operating layer providing natural interaction, explicit persistent memory, vector-based knowledge retrieval, and real-time HUD status monitoring.
+FRIDAY is a personal AI assistant web application featuring a minimal, futuristic visual layout, persistent memory storage, and Cloudflare Worker AI integration.
 
----
+## Features & Architecture
 
-## 🏛️ Architecture Overview
+* **Frontend**: Responsive single-page web app styled with glassmorphism, HUD metrics (Calendar, Memory status, System status), and Web Speech synthesis.
+* **Backend**: Cloudflare Worker handling `/api/chat` and `/api/memory` CRUD operations.
+* **Persistent Memory**: Cloudflare KV (`FRIDAY_MEMORY_KV`) managed by `MemoryStore` for persistent memory creation, updates, retrieval, deletion, and keyword relevance search.
+* **Context Schema**: Strictly categorizes conversation context, short-term context, persistent memories, knowledge base retrieval, external information, and tool outputs.
 
-The system is structured across decoupled frontend and serverless backend environments:
+## Project Structure
 
-* **Frontend**: Single-page web application hosted on **GitHub Pages**, featuring a responsive futuristic HUD interface, voice interaction (STT & TTS), and real-time network/system status.
-* **Backend**: **Cloudflare Workers** acting as the API layer and orchestrator.
-* **AI Engine**: **Cloudflare Workers AI** powered by `@cf/zai-org/glm-4.7-flash`.
-* **Persistent Memory**: **Cloudflare KV** for explicit key-value persistent user memories.
-* **Knowledge Base**: **Cloudflare AI Search** (`friday-knowledge` instance, `default` namespace, `vector` retrieval).
-
----
-
-## 🎨 Frontend Features & UX
-
-* **Arc Reactor Core**: Dynamic visual HUD reactor indicator displaying state changes (idle, thinking, listening).
-* **HUD Telemetry Panels**: Real-time status for local calendar/clock, memory connection, and system network status.
-* **Natural Voice Capabilities**: Integrated Speech Recognition (STT) and Speech Synthesis (TTS) with multi-language fallback support.
-* **Responsive Design**: Mobile-first layout optimized across desktop and mobile browsers.
-
----
-
-## 🛠️ Local Development & Deployment
-
-### View Frontend Locally
-
-Simply serve `index.html` using any HTTP server:
-
-```bash
-# Example using Python
-python3 -m http.server 8000
+```
+├── AGENTS.md                  # Development rules and architecture guidelines
+├── README.md                  # Project summary and documentation
+├── index.html                 # Frontend user interface
+├── package.json               # Dependencies and scripts
+├── wrangler.toml              # Cloudflare Worker configuration
+├── src/
+│   ├── worker.ts              # Worker API routes and response composition
+│   └── memory/
+│       ├── types.ts           # Memory interfaces & KV bindings
+│       ├── memory-store.ts    # MemoryStore class with KV persistence
+│       └── index.ts           # Memory module exports
+└── tests/
+    └── memory-store.test.ts   # Comprehensive memory layer test suite
 ```
 
-Open `http://localhost:8000` in your web browser.
+## Setup & Running Tests
 
-### Configuration
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-* Backend worker endpoint: `https://friday-ai.elbrayan7894435.workers.dev`
-* User session IDs are safely generated and retained locally via `localStorage` (`friday_user_id`).
+2. Run test suite:
+   ```bash
+   npm test
+   ```
 
----
-
-## 📜 Agent Guidelines & Rules
-
-All development on FRIDAY follows strict safety, privacy, memory distinction, and architecture guidelines detailed in [`AGENTS.md`](./AGENTS.md).
+3. Deploy Cloudflare Worker:
+   ```bash
+   npx wrangler deploy
+   ```
