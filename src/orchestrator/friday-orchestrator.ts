@@ -12,11 +12,11 @@ export class FridayOrchestrator {
   public contextManager: ContextManager;
   public responseGenerator: ResponseGenerator;
 
-  constructor(memoryStore?: MemoryStore, knowledgeService?: KnowledgeService) {
+  constructor(memoryStore?: MemoryStore, knowledgeService?: KnowledgeService, aiProvider?: any) {
     this.router = new RequestRouter();
     this.toolRegistry = new ToolRegistry();
     this.contextManager = new ContextManager(memoryStore, knowledgeService);
-    this.responseGenerator = new ResponseGenerator();
+    this.responseGenerator = new ResponseGenerator(aiProvider);
 
     this.registerBuiltInTools(memoryStore);
   }
@@ -123,7 +123,7 @@ export class FridayOrchestrator {
     }
 
     // 4. Result Validation & Response Generation
-    return this.responseGenerator.generateResponse(
+    return await this.responseGenerator.generateResponse(
       analysis,
       context,
       executedToolResults,

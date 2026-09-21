@@ -1,16 +1,57 @@
 import { AssembledContext, OrchestratorResponse, RequestAnalysis, ToolExecutionResult } from './types';
 
 export class ResponseGenerator {
+  private aiProvider?: any;
+  private modelName: string;
+
+  constructor(aiProvider?: any, modelName = '@cf/zai-org/glm-4.7-flash') {
+    this.aiProvider = aiProvider;
+    this.modelName = modelName;
+  }
+
+  /**
+   * Safely extracts AI text completion from various Cloudflare Workers AI result objects.
+   */
+  private extractTextFromAIResult(raw: any): string {
+    if (!raw) return '';
+    if (typeof raw === 'string') return raw.trim();
+
+    if (typeof raw.response === 'string' && raw.response.trim()) {
+      return raw.response.trim();
+    }
+    if (typeof raw.text === 'string' && raw.text.trim()) {
+      return raw.text.trim();
+    }
+    if (raw.result) {
+      if (typeof raw.result === 'string' && raw.result.trim()) {
+        return raw.result.trim();
+      }
+      if (typeof raw.result.response === 'string' && raw.result.response.trim()) {
+        return raw.result.response.trim();
+      }
+    }
+    if (Array.isArray(raw.choices) && raw.choices[0]) {
+      const choice = raw.choices[0];
+      if (choice.message && typeof choice.message.content === 'string' && choice.message.content.trim()) {
+        return choice.message.content.trim();
+      }
+      if (typeof choice.text === 'string' && choice.text.trim()) {
+        return choice.text.trim();
+      }
+    }
+    return '';
+  }
+
   /**
    * Constructs verified orchestrator response.
-   * Ensures FRIDAY never claims a tool succeeded unless verified.
+   * Invokes Workers AI for response generation when available, falling back safely.
    */
-  generateResponse(
+  async generateResponse(
     analysis: RequestAnalysis,
     context: AssembledContext,
     executedTools: ToolExecutionResult[],
     auditTrail: any[]
-  ): OrchestratorResponse {
+  ): Promise<OrchestratorResponse> {
     if (analysis.category === 'unsupported') {
       return {
         response: 'I cannot fulfill this request as it exceeds my supported operational boundaries or security policies.',
@@ -28,8 +69,6 @@ export class ResponseGenerator {
 
     const successfulTools = executedTools.filter((t) => t.success);
     const failedTools = executedTools.filter((t) => !t.success);
-
-    let textParts: string[] = [];
 
     // Pending confirmation check
     if (analysis.requiresConfirmation && executedTools.length === 0) {
@@ -54,34 +93,69 @@ export class ResponseGenerator {
       };
     }
 
-    // Base text
-    textParts.push(`FRIDAY response for query: "${context.userMessage}"`);
+    // Build LLM System & Context Prompt
+    const systemPrompt = [
+      'You are FRIDAY, an intelligent, calm, precise, and professional personal AI assistant.',
+      'Answer the user message accurately using the provided persistent memory, knowledge base, and tool results.',
+      'Never claim to have executed a tool or accessed a memory unless explicitly confirmed in context.',
+    ].join(' ');
 
-    // Memory Context
+    let contextBlocks: string[] = [];
+
     if (context.persistentMemories && context.persistentMemories.length > 0) {
       const memoryText = context.persistentMemories.map((m) => `- ${m.content}`).join('\n');
-      textParts.push(`\n[Persistent Memory Context Applied]:\n${memoryText}`);
+      contextBlocks.push(`[Persistent User Memories]:\n${memoryText}`);
     }
 
-    // Knowledge Context
     if (context.knowledgeBaseResults && context.knowledgeBaseResults.length > 0) {
       const kbText = context.knowledgeBaseResults.map((k) => `- ${k.title ? k.title + ': ' : ''}${k.content}`).join('\n');
-      textParts.push(`\n[Knowledge Base Context Applied]:\n${kbText}`);
+      contextBlocks.push(`[Knowledge Base Items]:\n${kbText}`);
     }
 
-    // Tool execution verified output
     if (successfulTools.length > 0) {
-      const toolText = successfulTools.map((t) => `- Tool '${t.toolName}' executed successfully`).join('\n');
-      textParts.push(`\n[Tools Executed & Verified]:\n${toolText}`);
+      const toolText = successfulTools
+        .map((t) => `- Tool '${t.toolName}' result: ${JSON.stringify(t.result)}`)
+        .join('\n');
+      contextBlocks.push(`[Verified Tool Results]:\n${toolText}`);
     }
 
     if (failedTools.length > 0) {
-      const failText = failedTools.map((t) => `- Tool '${t.toolName}' failed: ${t.error}`).join('\n');
-      textParts.push(`\n[Tool Failure Notes]:\n${failText}`);
+      const failText = failedTools.map((t) => `- Tool '${t.toolName}' error: ${t.error}`).join('\n');
+      contextBlocks.push(`[Tool Failures]:\n${failText}`);
+    }
+
+    let finalResponseText = '';
+
+    if (this.aiProvider && typeof this.aiProvider.run === 'function') {
+      try {
+        const messages = [
+          { role: 'system', content: systemPrompt },
+          ...(contextBlocks.length > 0
+            ? [{ role: 'system', content: `Retrieved Context:\n${contextBlocks.join('\n\n')}` }]
+            : []),
+          { role: 'user', content: context.userMessage },
+        ];
+
+        const aiOutput = await this.aiProvider.run(this.modelName, { messages });
+        finalResponseText = this.extractTextFromAIResult(aiOutput);
+      } catch (aiErr: any) {
+        console.error('Workers AI execution error:', aiErr);
+        // Fallback gracefully without empty response
+        finalResponseText = `I encountered an issue generating a response via AI model. Summary of query: "${context.userMessage}".`;
+      }
+    }
+
+    // Fallback if AI provider is unavailable or returned empty text
+    if (!finalResponseText) {
+      const parts: string[] = [`FRIDAY processed query: "${context.userMessage}".`];
+      if (contextBlocks.length > 0) {
+        parts.push(`\nContext Applied:\n${contextBlocks.join('\n\n')}`);
+      }
+      finalResponseText = parts.join('\n');
     }
 
     return {
-      response: textParts.join('\n'),
+      response: finalResponseText,
       category: analysis.category,
       toolsExecuted: successfulTools.map((t) => t.toolName),
       requiresConfirmation: false,

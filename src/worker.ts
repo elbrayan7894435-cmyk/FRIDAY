@@ -36,8 +36,8 @@ export default {
       retrievalType: 'vector',
     });
 
-    // Orchestrator initialization
-    const orchestrator = new FridayOrchestrator(memoryStore, knowledgeService);
+    // Orchestrator initialization with Workers AI binding env.AI
+    const orchestrator = new FridayOrchestrator(memoryStore, knowledgeService, env.AI);
 
     try {
       // Diagnostics Endpoint for Developers
@@ -80,9 +80,12 @@ export default {
         const userMessage = body.message || body.prompt || '';
         const confirmedByUser = body.confirmedByUser === true;
 
-        if (!userMessage) {
+        if (!userMessage || typeof userMessage !== 'string' || userMessage.trim() === '') {
           return new Response(
-            JSON.stringify({ error: 'Message payload required.' }),
+            JSON.stringify({
+              error: 'Message payload required.',
+              response: 'Please provide a valid message.',
+            }),
             { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
           );
         }
@@ -92,9 +95,11 @@ export default {
           confirmedByUser,
         });
 
+        const reply = orchestratorResult.response || 'FRIDAY active. Processed query with no output text.';
+
         return new Response(
           JSON.stringify({
-            response: orchestratorResult.response,
+            response: reply,
             category: orchestratorResult.category,
             toolsExecuted: orchestratorResult.toolsExecuted,
             requiresConfirmation: orchestratorResult.requiresConfirmation,
@@ -109,13 +114,20 @@ export default {
         );
       }
 
-      return new Response(JSON.stringify({ error: 'Not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      });
-    } catch (err: any) {
       return new Response(
-        JSON.stringify({ error: err.message || 'Internal Server Error' }),
+        JSON.stringify({ error: 'Endpoint not found', response: 'Route not found.' }),
+        { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    } catch (err: any) {
+      console.error('Worker top-level exception:', err);
+      const errorMessage = err.message || 'Internal Server Error';
+
+      return new Response(
+        JSON.stringify({
+          error: errorMessage,
+          response: `Internal error: ${errorMessage}`,
+          status: 'error',
+        }),
         { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
