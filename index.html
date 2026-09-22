@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,7 +15,7 @@
             --status-red: #ff5555;
             --panel-bg: rgba(8, 20, 30, 0.65);
             --border-glow: rgba(120, 220, 255, 0.15);
-            --font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
         }
 
         * {
@@ -29,6 +29,8 @@
             background: var(--bg-glow);
             color: var(--primary-cyan);
             font-family: var(--font-family);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
             overflow-x: hidden;
             display: flex;
             justify-content: center;
@@ -279,6 +281,10 @@
             animation: fadeIn 0.3s ease;
         }
 
+        .message-content {
+            white-space: pre-wrap;
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(6px); }
             to { opacity: 1; transform: translateY(0); }
@@ -323,6 +329,7 @@
             color: white;
             outline: none;
             font-size: 15px;
+            font-family: inherit;
             transition: all 0.3s ease;
         }
 
@@ -338,6 +345,7 @@
             background: #bdf5ff;
             color: #041018;
             font-weight: bold;
+            font-family: inherit;
             cursor: pointer;
             transition: all 0.2s ease;
             display: flex;
@@ -351,8 +359,20 @@
             transform: translateY(-1px);
         }
 
+        .btn:focus-visible {
+            outline: 2px solid var(--accent-cyan);
+            outline-offset: 2px;
+        }
+
         .btn:active {
             transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .btn-mic {
@@ -393,6 +413,9 @@
 
         /* RESPONSIVE */
         @media (max-width: 650px) {
+            .container {
+                padding: 20px 15px;
+            }
             .panels {
                 grid-template-columns: 1fr;
             }
@@ -417,75 +440,81 @@
 <div class="container">
 
     <!-- HEADER TOP -->
-    <div class="top">
+    <header class="top">
         <div class="logo">FRIDAY</div>
-        <div class="status" id="systemStatus">
+        <div class="status" id="systemStatus" aria-live="polite">
             <span class="status-dot"></span>
             <span id="statusText">SYSTEM ONLINE</span>
         </div>
-    </div>
+    </header>
 
     <!-- CORE VISUAL -->
-    <div class="core-wrapper">
+    <div class="core-wrapper" aria-hidden="true">
         <div class="core" id="coreReactor">
             <div class="inner"></div>
         </div>
     </div>
 
     <!-- GREETING -->
-    <div class="greeting">
-        <h1 id="greetingHeading">GOOD EVENING</h1>
-        <p>Your personal AI assistant</p>
-    </div>
-
-    <!-- HUD PANELS -->
-    <div class="panels">
-        <div class="panel">
-            <div class="panel-title">CALENDAR</div>
-            <div class="panel-value" id="panelCalendar">--</div>
+    <main style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+        <div class="greeting">
+            <h1 id="greetingHeading">GOOD EVENING</h1>
+            <p>Your personal AI assistant</p>
         </div>
 
-        <div class="panel">
-            <div class="panel-title">MEMORY</div>
-            <div class="panel-value" id="panelMemory">ACTIVE</div>
+        <!-- HUD PANELS -->
+        <div class="panels">
+            <div class="panel">
+                <div class="panel-title">CALENDAR</div>
+                <div class="panel-value" id="panelCalendar">--</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">MEMORY</div>
+                <div class="panel-value" id="panelMemory">ACTIVE</div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">SYSTEM</div>
+                <div class="panel-value" id="panelSystem">ONLINE</div>
+            </div>
         </div>
 
-        <div class="panel">
-            <div class="panel-title">SYSTEM</div>
-            <div class="panel-value" id="panelSystem">ONLINE</div>
+        <!-- CHAT WINDOW -->
+        <div class="chat-window" id="chatWindow" role="log" aria-live="polite" aria-label="Conversation log">
+            <div class="message friday-message">
+                <div class="message-name">FRIDAY</div>
+                <div class="message-content">System initialized. How can I assist you?</div>
+            </div>
         </div>
-    </div>
 
-    <!-- CHAT WINDOW -->
-    <div class="chat-window" id="chatWindow">
-        <div class="message friday-message">
-            <div class="message-name">FRIDAY</div>
-            <div>System initialized. How can I assist you?</div>
+        <!-- INPUT CONTROLS -->
+        <div class="chat-input-container">
+            <button class="btn btn-mic" id="micButton" title="Toggle microphone (Alt + M)" aria-label="Toggle microphone">
+                🎤
+            </button>
+
+            <input
+                id="messageInput"
+                type="text"
+                placeholder="Talk to FRIDAY..."
+                autocomplete="off"
+                spellcheck="false"
+                aria-label="Message FRIDAY"
+            >
+
+            <button class="btn" id="sendButton" aria-label="Send message">ENTER</button>
         </div>
-    </div>
-
-    <!-- INPUT CONTROLS -->
-    <div class="chat-input-container">
-        <button class="btn btn-mic" id="micButton" title="Activar micrófono (Alt + M)">
-            🎤
-        </button>
-
-        <input 
-            id="messageInput" 
-            type="text" 
-            placeholder="Talk to FRIDAY..." 
-            autocomplete="off"
-            spellcheck="false"
-        >
-
-        <button class="btn" id="sendButton">ENTER</button>
-    </div>
+    </main>
 
 </div>
 
 <script>
-    // CONFIGURACIÓN Y REFERENCIAS
-    const WORKER_URL = "https://friday-ai.elbrayan7894435.workers.dev";
+    // CONFIGURATION AND REFERENCES
+    // Supports dynamic override via localStorage for local testing or custom deployment
+    const DEFAULT_WORKER_URL = "https://friday-ai.elbrayan7894435.workers.dev";
+    const WORKER_URL = localStorage.getItem("friday_worker_url") || DEFAULT_WORKER_URL;
+    const REQUEST_TIMEOUT_MS = 15000; // 15-second timeout safeguard
     
     const input = document.getElementById("messageInput");
     const button = document.getElementById("sendButton");
@@ -501,7 +530,7 @@
     const systemStatus = document.getElementById("systemStatus");
     const statusText = document.getElementById("statusText");
 
-    // 1. GESTIÓN DE ID DE USUARIO DE FORMA SEGURA
+    // 1. SAFE USER ID MANAGEMENT
     function getUserId() {
         let userId = localStorage.getItem("friday_user_id");
         if (!userId) {
@@ -515,21 +544,21 @@
 
     const userId = getUserId();
 
-    // 2. ACTUALIZACIÓN DINÁMICA DEL HUD Y RELOJ
-    function updateHUD() {
+    // 2. DYNAMIC HUD & CLOCK UPDATE
+    function updateHUD(memoryStatusOverride) {
         const now = new Date();
         
-        // Saludo dinámico según hora
+        // Dynamic greeting based on hour
         const hours = now.getHours();
         if (hours < 12) greetingHeading.textContent = "GOOD MORNING";
         else if (hours < 18) greetingHeading.textContent = "GOOD AFTERNOON";
         else greetingHeading.textContent = "GOOD EVENING";
 
-        // Formato Fecha
+        // Date format
         const options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false };
         panelCalendar.textContent = now.toLocaleDateString('en-US', options).toUpperCase();
 
-        // Estado de red
+        // Network status
         if (navigator.onLine) {
             panelSystem.textContent = "ONLINE";
             statusText.textContent = "SYSTEM ONLINE";
@@ -540,13 +569,17 @@
             systemStatus.classList.add("offline");
         }
 
-        panelMemory.textContent = userId ? "CONNECTED" : "READY";
+        if (memoryStatusOverride) {
+            panelMemory.textContent = memoryStatusOverride;
+        } else {
+            panelMemory.textContent = userId ? "CONNECTED" : "READY";
+        }
     }
 
-    setInterval(updateHUD, 1000);
+    setInterval(() => updateHUD(), 1000);
     updateHUD();
 
-    // 3. AGREGAR MENSAJE A LA INTERFAZ
+    // 3. UI MESSAGE MANAGEMENT
     function addMessage(text, type) {
         const message = document.createElement("div");
         message.classList.add("message");
@@ -557,6 +590,7 @@
         name.textContent = type === "user" ? "YOU" : "FRIDAY";
 
         const content = document.createElement("div");
+        content.classList.add("message-content");
         content.textContent = text;
 
         message.appendChild(name);
@@ -567,7 +601,7 @@
         return message;
     }
 
-    // INDICADOR DE "PENSANDO"
+    // TYPING INDICATOR
     function showTypingIndicator() {
         const message = document.createElement("div");
         message.classList.add("message", "friday-message");
@@ -592,24 +626,50 @@
         if (indicator) indicator.remove();
     }
 
-    // 4. SÍNTESIS DE VOZ (FRIDAY HABLA)
+    // 4. VOICE SYNTHESIS (SPEECH OUTPUT)
+    let availableVoices = [];
+    function loadVoices() {
+        if ('speechSynthesis' in window) {
+            availableVoices = window.speechSynthesis.getVoices();
+        }
+    }
+    if ('speechSynthesis' in window) {
+        loadVoices();
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
     function speak(text) {
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel(); // Cancelar lecturas previas
+            window.speechSynthesis.cancel(); // Clear previous queue
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'es-ES';
+            utterance.lang = navigator.language || 'en-US';
             utterance.rate = 1.0;
             utterance.pitch = 1.0;
+
+            if (availableVoices.length > 0) {
+                // Prefer matching locale voices
+                const targetLang = (navigator.language || 'en-US').substring(0, 2);
+                const matchingVoice = availableVoices.find(v => v.lang.startsWith(targetLang));
+                if (matchingVoice) utterance.voice = matchingVoice;
+            }
+
             window.speechSynthesis.speak(utterance);
         }
     }
 
-    // 5. ENVIAR MENSAJE AL WORKER (LÓGICA PRINCIPAL)
+    // 5. SEND MESSAGE TO WORKER WITH TIMEOUT & ROBUST ERROR HANDLING
     async function sendMessage() {
         const text = input.value.trim();
         if (text === "") return;
 
-        // Deshabilitar entrada temporalmente
+        if (!navigator.onLine) {
+            addMessage(text, "user");
+            addMessage("Offline mode active. Connection to backend server is unavailable.", "friday");
+            input.value = "";
+            return;
+        }
+
+        // Temporarily disable input controls
         input.value = "";
         input.disabled = true;
         button.disabled = true;
@@ -617,8 +677,11 @@
         addMessage(text, "user");
         showTypingIndicator();
 
-        // Cambiar animación del reactor
+        // Update reactor animation
         coreReactor.classList.add("thinking");
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
         try {
             const response = await fetch(WORKER_URL, {
@@ -629,27 +692,57 @@
                 body: JSON.stringify({
                     message: text,
                     userId: userId
-                })
+                }),
+                signal: controller.signal
             });
 
+            clearTimeout(timeoutId);
             removeTypingIndicator();
 
             if (!response.ok) {
-                throw new Error(`Server status: ${response.status}`);
+                if (response.status === 429) {
+                    throw new Error("Rate limit exceeded. Please wait a moment before sending another message.");
+                } else if (response.status >= 500) {
+                    throw new Error(`Server error (${response.status}). My backend service is currently experiencing issues.`);
+                } else {
+                    throw new Error(`Unexpected status code: ${response.status}`);
+                }
             }
 
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonErr) {
+                throw new Error("Invalid response format received from backend server.");
+            }
+
             const reply = data.response || "I received an empty response.";
+
+            // Handle metadata if backend provided memory/knowledge context indicators
+            if (data.memoryUsed) {
+                updateHUD("KV MEMORY");
+            } else if (data.knowledgeUsed) {
+                updateHUD("AI SEARCH");
+            }
 
             addMessage(reply, "friday");
             speak(reply);
 
         } catch (error) {
+            clearTimeout(timeoutId);
             console.error("Communication error:", error);
             removeTypingIndicator();
-            addMessage("Connection error. My backend is not responding.", "friday");
+
+            let errorMessage = "Connection error. My backend is not responding.";
+            if (error.name === "AbortError") {
+                errorMessage = "Request timed out. My backend took too long to respond.";
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            addMessage(errorMessage, "friday");
         } finally {
-            // Restaurar estado
+            // Restore control state
             coreReactor.classList.remove("thinking");
             input.disabled = false;
             button.disabled = false;
@@ -657,13 +750,13 @@
         }
     }
 
-    // 6. RECONOCIMIENTO DE VOZ (MICROFONO)
+    // 6. SPEECH RECOGNITION (MICROPHONE INPUT)
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
 
     if (SpeechRecognition) {
         recognition = new SpeechRecognition();
-        recognition.lang = 'es-ES';
+        recognition.lang = navigator.language || 'en-US';
         recognition.continuous = false;
 
         recognition.onstart = () => {
@@ -687,7 +780,7 @@
             stopListening();
         };
     } else {
-        micButton.style.display = "none"; // Ocultar si el navegador no lo soporta
+        micButton.style.display = "none"; // Hide if unsupported by browser
     }
 
     function stopListening() {
@@ -714,14 +807,14 @@
         }
     });
 
-    // Shortcut Alt + M para activar micrófono rápidamente
+    // Shortcut Alt + M to toggle microphone
     document.addEventListener("keydown", (e) => {
         if (e.altKey && e.key.toLowerCase() === 'm') {
             micButton.click();
         }
     });
 
-    // Detectar cambios en el estado de red
+    // Detect network status changes
     window.addEventListener('online', updateHUD);
     window.addEventListener('offline', updateHUD);
 </script>
