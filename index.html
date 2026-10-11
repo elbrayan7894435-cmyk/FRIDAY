@@ -446,7 +446,7 @@
         </div>
 
         <div class="panel">
-            <div class="panel-title">MEMORY</div>
+            <div class="panel-title">SESSION</div>
             <div class="panel-value" id="panelMemory">ACTIVE</div>
         </div>
 
@@ -485,7 +485,7 @@
 
 <script>
     // CONFIGURACIÓN Y REFERENCIAS
-    const WORKER_URL = "https://friday-ai.elbrayan7894435.workers.dev";
+    const WORKER_URL = "https://friday-ai.elbrayan7894435.workers.dev/v1/chat/completions";
     
     const input = document.getElementById("messageInput");
     const button = document.getElementById("sendButton");
@@ -540,7 +540,7 @@
             systemStatus.classList.add("offline");
         }
 
-        panelMemory.textContent = userId ? "CONNECTED" : "READY";
+        panelMemory.textContent = userId ? "LOCAL ID READY" : "NOT READY";
     }
 
     setInterval(updateHUD, 1000);
@@ -627,19 +627,24 @@
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    message: text,
-                    userId: userId
+                    prompt: text,
+                    sessionId: userId,
+                    taskProfile: "STRICT_FACTUAL"
                 })
             });
 
+            const data = await response.json().catch(() => ({}));
             removeTypingIndicator();
 
-            if (!response.ok) {
-                throw new Error(`Server status: ${response.status}`);
+            if (!response.ok || data.success !== true) {
+                const detail = data.details || data.error || data.friday_reply || "Unexpected response from FRIDAY backend.";
+                throw new Error(`FRIDAY API ${response.status}: ${detail}`);
             }
 
-            const data = await response.json();
-            const reply = data.response || "I received an empty response.";
+            const reply = typeof data.friday_reply === "string" ? data.friday_reply.trim() : "";
+            if (!reply) {
+                throw new Error("FRIDAY backend returned success without a reply.");
+            }
 
             addMessage(reply, "friday");
             speak(reply);
@@ -647,7 +652,8 @@
         } catch (error) {
             console.error("Communication error:", error);
             removeTypingIndicator();
-            addMessage("Connection error. My backend is not responding.", "friday");
+            const detail = error instanceof Error ? error.message : String(error);
+            addMessage(`FRIDAY could not complete the request. ${detail}`, "friday");
         } finally {
             // Restaurar estado
             coreReactor.classList.remove("thinking");
